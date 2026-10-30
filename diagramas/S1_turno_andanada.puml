@@ -1,0 +1,185 @@
+@startuml S1_turno_andanada
+title TPO POO - RPG por turnos\nSecuencia 1: Turno del jugador usando la definitiva del Arquero (Andanada Cegadora)
+
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 220
+skinparam ParticipantPadding 10
+skinparam BoxPadding 10
+
+actor Jugador as J
+participant "pantalla : PantallaBatalla" as V
+participant "controlador : ControladorCombate" as CC
+participant "combate : Combate" as CO
+participant "gestor : GestorDeTurnos" as G
+participant "arquero : Arquero" as A
+participant "andanada : HabilidadDeEstado" as H
+participant "plantilla : Aturdimiento" as P
+participant "e1 : Esqueleto" as E1
+
+== 1. Arranca el turno del arquero ==
+
+CC -> CO : getSiguienteEnActuar()
+activate CO
+CO -> G : getSiguienteEnActuar()
+activate G
+G --> CO : arquero
+deactivate G
+CO -> A : iniciarTurno()
+activate A
+note right of A
+  Solo la primera vez que se pregunta por este
+  turno (turnoPreparado). Baja la guardia del turno
+  anterior y los cooldowns. Los efectos NO se
+  procesan aca sino al cerrar el turno: asi un
+  aturdimiento de 1 turno llega a hacer efecto.
+end note
+deactivate A
+CO --> CC : arquero
+deactivate CO
+
+CC -> CO : getMovimientosDelTurno()
+activate CO
+CO -> A : getMovimientos()
+activate A
+A --> CO : los 4 movimientos
+deactivate A
+loop para cada uno de los 4 movimientos
+  CO -> H : estaDesbloqueado(personaje : Personaje)
+  activate H
+  deactivate H
+  CO -> H : estaDisponible(usuario : Combatiente)
+  activate H
+  H -> H : estaEnCooldown()
+  H -> A : tieneManaSuficiente(costo : int)
+  H --> CO : true
+  deactivate H
+end
+CO --> CC : disponibles
+deactivate CO
+
+CC --> V : EstadoCombateDTO (turnoDelJugador = true)
+note right of CC
+  El controlador le manda el estado a la vista por
+  VistaDelJuego.mostrarBatalla(); la ventana se lo
+  pasa a esta pantalla. La vista solo recibe DTOs.
+end note
+
+== 2. El jugador elige Andanada Cegadora ==
+
+J -> V : click en "Andanada Cegadora"
+activate V
+note right of V
+  El MovimientoDTO dice eligeObjetivo = false
+  (alcance TODOS_LOS_ENEMIGOS): no se pide
+  objetivo, va contra todos.
+end note
+V -> CC : usarMovimiento(indiceMovimiento : int)
+activate CC
+
+CC -> CO : getObjetivosPosibles(movimiento : Movimiento)
+activate CO
+CO -> H : getObjetivosPosibles(aliados : List<Combatiente>, enemigos : List<Combatiente>)
+activate H
+H --> CO : [e1, e2]
+deactivate H
+CO --> CC : [e1, e2]
+deactivate CO
+
+== 3. Ejecucion del movimiento ==
+
+CC -> CO : ejecutarMovimiento(movimiento : Movimiento, objetivos : List<Combatiente>)
+activate CO
+
+create participant "accion : AccionUsarMovimiento" as AC
+CO -> AC : <<create>> (autor, movimiento, objetivos, calculador)
+note right of CO
+  Creator + Command: Combate tiene los datos para
+  armar la Accion, asi que la crea y le delega la
+  ejecucion.
+end note
+
+CO -> AC : ejecutar()
+activate AC
+AC -> A : consumirMana(costo : int)
+activate A
+deactivate A
+AC -> H : esDefinitivo()
+activate H
+H --> AC : true
+deactivate H
+AC -> H : iniciarCooldown()
+activate H
+deactivate H
+
+AC -> H : aplicar(usuario : Combatiente, objetivos : List<Combatiente>, calculador : CalculadorDeDaño)
+activate H
+create participant "resultado : ResultadoAccion" as R
+H -> R : <<create>> (descripcion)
+
+loop para cada objetivo (e1 y despues e2)
+  H -> E1 : estaVivo()
+  activate E1
+  E1 --> H : true
+  deactivate E1
+  H -> H : acierta(objetivo : Combatiente)
+  activate H
+  H -> E1 : getResistenciaAEstados()
+  deactivate H
+
+  alt acierta la tirada
+    H -> E1 : aplicarEfecto(efecto : EfectoEstado)
+    activate E1
+    E1 -> P : copiar()
+    activate P
+    create participant "aturdimiento : Aturdimiento" as AT
+    P -> AT : <<create>>
+    P --> E1 : aturdimiento
+    deactivate P
+    E1 -> AT : alAplicarse(objetivo : Combatiente)
+    activate AT
+    deactivate AT
+    E1 --> H : aturdimiento
+    deactivate E1
+    H -> R : agregarEfectoAplicado(efecto : EfectoEstado)
+    H -> R : agregarObjetivoAfectado(objetivo : Combatiente)
+  else falla la tirada
+    H -> R : agregarObjetivoFallado(objetivo : Combatiente)
+  end
+end
+
+note over H
+  La tirada es INDIVIDUAL por objetivo: puede
+  acertar en e1 y fallar en e2. La plantilla se
+  copia en cada uno, asi dos enemigos nunca
+  comparten el mismo efecto.
+end note
+
+H --> AC : resultado
+deactivate H
+AC --> CO : resultado
+deactivate AC
+
+CO -> CO : avanzarTurno()
+activate CO
+CO -> A : procesarEfectosDeTurno()
+CO -> G : consumirTurno()
+deactivate CO
+CO -> CO : retirarCaidos()
+CO --> CC : resultado
+deactivate CO
+
+CC -> CO : hayGanador()
+activate CO
+CO --> CC : false
+deactivate CO
+CC --> V : EstadoCombateDTO (turnoDelJugador = false)
+deactivate CC
+note right of V
+  Le toca a un enemigo: la pantalla espera 800 ms
+  con un javax.swing.Timer y llama a
+  avanzarTurnoAutomatico(). Asi cada ataque
+  enemigo se ve por separado.
+end note
+deactivate V
+
+@enduml

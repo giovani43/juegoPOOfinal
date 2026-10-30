@@ -1,0 +1,98 @@
+@startuml S3_mapa_de_pantallas
+title TPO POO - RPG por turnos\nMapa de pantallas y transiciones (una clase Pantalla* por estado, ver Diagrama 5)
+
+skinparam state {
+  BackgroundColor #f5f5f5
+  BorderColor #555555
+  FontSize 13
+}
+skinparam ArrowFontSize 11
+skinparam nodesep 35
+skinparam ranksep 45
+
+[*] -down-> PantallaInicio
+
+state PantallaInicio {
+  PantallaInicio : Nueva partida
+  PantallaInicio : Continuar partida (solo si hay guardado)
+  PantallaInicio : Salir
+}
+
+state PantallaSeleccionParty {
+  PantallaSeleccionParty : elegir 3 de las 6 clases, sin repetir
+  PantallaSeleccionParty : dibujo, descripcion, vida, mana, velocidad
+}
+
+state PantallaBatalla {
+  PantallaBatalla : turno del jugador: 4 movimientos / Defender / Objeto
+  PantallaBatalla : elegir objetivo si el alcance es de uno solo
+  PantallaBatalla : turnos enemigos automaticos con Timer (800 ms)
+  PantallaBatalla : fondo segun la zona (Fondos)
+}
+
+state PantallaResultado {
+  PantallaResultado : Victoria: experiencia y oro, como quedo la party
+  PantallaResultado : Derrota: se borra el guardado
+  PantallaResultado : run ganada: se supero la etapa 20
+}
+
+state PantallaEstadoParty {
+  PantallaEstadoParty : nivel, experiencia, vida, mana y equipo
+  PantallaEstadoParty : oro e inventario (usar objetos)
+  PantallaEstadoParty : que etapa viene
+}
+
+state PantallaTragamonedas {
+  PantallaTragamonedas : primera tirada gratis, despues 50 de oro
+  PantallaTragamonedas : rodillos animados con Timer
+}
+
+state PantallaTienda {
+  PantallaTienda : 5 consumibles fijos
+  PantallaTienda : 3 slots de equipo + reroll
+  PantallaTienda : avisa que equipo se descarta
+}
+
+PantallaInicio -down-> PantallaSeleccionParty : Nueva partida
+PantallaInicio -right-> PantallaEstadoParty : Continuar partida
+PantallaInicio -down-> [*] : Salir
+
+PantallaSeleccionParty -right-> PantallaBatalla : confirmar party\n(etapa 1)
+PantallaSeleccionParty -up-> PantallaInicio : Volver
+
+PantallaBatalla -down-> PantallaResultado : cae el ultimo enemigo\no toda la party
+
+PantallaResultado -right-> PantallaEstadoParty : Continuar\n(la run sigue)
+PantallaResultado -up-> PantallaInicio : Volver al inicio\n(derrota o run ganada)
+
+PantallaEstadoParty -up-> PantallaBatalla : Siguiente etapa\n(etapa de combate)
+PantallaEstadoParty -down-> PantallaTienda : Siguiente etapa\n(etapas 4 y 14)
+PantallaEstadoParty -down-> PantallaTragamonedas : Siguiente etapa\n(etapas 9 y 19)
+PantallaEstadoParty -up-> PantallaInicio : Volver al inicio\n(ya quedo guardado)
+
+PantallaTragamonedas -right-> PantallaTienda : Pasar a la tienda
+PantallaTienda -up-> PantallaEstadoParty : Seguir a la proxima etapa
+
+note right of PantallaTragamonedas
+  Aparece ANTES de la tienda y solo en las
+  etapas 9 y 19. Al pasar a la tienda la
+  maquina queda abandonada: no se vuelve.
+end note
+
+note bottom of PantallaBatalla
+  Todo vive en un solo JFrame (VentanaPrincipal)
+  con CardLayout: cada pantalla es una carta y se
+  muestra una por vez. El inventario no es una
+  ventana aparte: en la batalla es el boton Objeto
+  y entre etapas esta en PantallaEstadoParty. Los
+  avisos ("No alcanza el oro") son un cartel que
+  se va solo.
+end note
+
+note bottom of PantallaResultado
+  La muerte es permanente: al perder se borra el
+  guardado y no se puede retomar. La partida se
+  guarda sola al terminar cada etapa.
+end note
+
+@enduml
